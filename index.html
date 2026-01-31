@@ -10,82 +10,60 @@
 </head>
 
 <body>
-    <div class="app-container">
-        <!-- SETUP SCREEN -->
-        <div id="setup-screen" class="screen active">
-            <div class="setup-card">
-                <h1 class="title">🎯 Memory Swap</h1>
+    <!-- PANTALLA INTRO -->
+    <div id="intro-screen" class="screen intro-screen active">
+        <button id="intro-start-btn" class="intro-start-btn">▶ Iniciar</button>
+    </div>
 
-                <div class="setup-grid">
-                    <div class="config-section">
-                        <h2>📸 Imágenes</h2>
-                        <input type="file" id="image-input" accept="image/*" multiple>
-                        <label for="image-input" class="upload-btn">
-                            <span class="upload-icon">📁</span>
-                            Seleccionar 6 Imágenes
-                        </label>
-                        <div id="image-preview" class="image-preview"></div>
-                    </div>
+    <!-- PANTALLA BANNER -->
+    <div id="banner-screen" class="screen banner-screen">
+        <img id="banner-img" src="img/banner.png" alt="Banner" class="banner-img">
+    </div>
 
-                    <div class="config-section">
-                        <h2>⏱️ Tiempos</h2>
-                        <div class="time-inputs">
-                            <div class="time-input-group">
-                                <label for="preview-time">Vista previa (seg)</label>
-                                <input type="number" id="preview-time" value="4" min="1" max="30">
-                            </div>
-                            <div class="time-input-group">
-                                <label for="game-time">Juego (seg)</label>
-                                <input type="number" id="game-time" value="20" min="5" max="120">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <button id="start-btn" class="btn-primary" disabled>
-                    🎮 Iniciar Juego
-                </button>
+    <!-- PANTALLA DE JUEGO -->
+    <div id="game-screen" class="screen game-screen">
+        <div class="game-header">
+            <button id="game-start-btn" class="btn-game-start">▶ Iniciar Juego</button>
+            <div class="game-info">
+                <span class="game-state" id="game-state">ESPERANDO...</span>
+                <span class="timer" id="timer">00:00</span>
             </div>
         </div>
 
-        <!-- GAME SCREEN -->
-        <div id="game-screen" class="screen">
-            <div class="game-header">
-                <div class="game-state" id="game-state">VISTA PREVIA</div>
-                <div class="timer" id="timer">00:00</div>
+        <div class="game-area">
+            <!-- Fila Superior (Objetivo) -->
+            <div class="row-container">
+                <h2 class="row-title">🎯 Orden Objetivo</h2>
+                <div id="target-row" class="image-row target-row"></div>
             </div>
 
-            <div class="game-area">
-                <!-- Fila Superior (Objetivo) -->
-                <div class="row-container">
-                    <h2 class="row-title">🎯 Orden Objetivo</h2>
-                    <div id="target-row" class="image-row target-row"></div>
-                </div>
-
-                <!-- Fila Inferior (Jugable) -->
-                <div class="row-container">
-                    <h2 class="row-title">🔄 Tu Orden</h2>
-                    <div id="player-row" class="image-row player-row"></div>
-                </div>
+            <!-- Fila Inferior (Jugable) -->
+            <div class="row-container">
+                <h2 class="row-title">🔄 Tu Orden</h2>
+                <div id="player-row" class="image-row player-row"></div>
             </div>
+        </div>
 
-            <!-- Controles durante el juego -->
-            <div id="game-controls" class="game-controls hidden">
-                <p class="swap-hint-text">👆 Haz clic en dos imágenes para intercambiarlas</p>
-                <button id="reveal-btn" class="btn-reveal">✅ Revelar y Terminar</button>
-            </div>
+        <!-- Controles durante el juego -->
+        <div id="game-controls" class="game-controls hidden">
+            <p class="swap-hint-text">👆 Haz clic en dos imágenes para intercambiarlas</p>
+            <button id="reveal-btn" class="btn-reveal">✅ Revelar y Terminar</button>
+        </div>
 
-            <!-- Resultado -->
-            <div id="result-section" class="result-section hidden">
-                <div class="result-card">
-                    <h2 id="result-title">Resultados</h2>
-                    <div id="result-score" class="result-score"></div>
-                    <button id="restart-btn" class="btn-primary">🔄 Jugar de Nuevo</button>
-                    <button id="new-game-btn" class="btn-secondary">📸 Nuevo Juego</button>
-                </div>
+        <!-- Resultado -->
+        <div id="result-section" class="result-section hidden">
+            <div class="result-card">
+                <h2 id="result-title">Resultados</h2>
+                <div id="result-score" class="result-score"></div>
+                <button id="restart-btn" class="btn-primary">🔄 Jugar de Nuevo</button>
             </div>
         </div>
     </div>
+
+    <!-- AUDIOS -->
+    <audio id="audio-intro" src="audio/29 - Revelacion - Sueños.wav" preload="auto"></audio>
+    <audio id="audio-preview" src="audio/4secs.mp3" preload="auto"></audio>
+    <audio id="audio-game" src="audio/30sec.mp3" preload="auto"></audio>
 
     <script src="app.js"></script>
 </body>

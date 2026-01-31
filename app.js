@@ -1,39 +1,51 @@
 // ===== GAME STATE =====
 const GameState = {
-    SETUP: 'SETUP',
+    INTRO: 'INTRO',
+    BANNER: 'BANNER',
+    WAITING: 'WAITING',
     PREVIEW: 'PREVIEW',
     PLAYING: 'PLAYING',
     REVEALING: 'REVEALING',
     RESULT: 'RESULT'
 };
 
+// ===== CONFIGURATION =====
+const CONFIG = {
+    previewTime: 4,    // Segundos para memorizar
+    gameTime: 30,      // Segundos para jugar
+    images: [
+        'img/game/1.jpeg',
+        'img/game/2.jpeg',
+        'img/game/3.jpeg',
+        'img/game/4.jpeg',
+        'img/game/5.jpeg',
+        'img/game/6.jpeg'
+    ]
+};
+
 // ===== GAME DATA =====
 let game = {
-    state: GameState.SETUP,
-    images: [],
-    targetOrder: [],     // Orden original (objetivo)
-    playerOrder: [],     // Orden del jugador (desordenado inicialmente)
-    previewTime: 4,
-    gameTime: 20,
+    state: GameState.INTRO,
+    targetOrder: [],     // Orden objetivo (aleatorio cada vez)
+    playerOrder: [],     // Orden del jugador (desordenado)
     timer: null,
     timeRemaining: 0,
-    selectedCardIndex: null  // Índice de la carta seleccionada para swap
+    selectedCardIndex: null
 };
 
 // ===== DOM ELEMENTS =====
 const elements = {
     // Screens
-    setupScreen: document.getElementById('setup-screen'),
+    introScreen: document.getElementById('intro-screen'),
+    bannerScreen: document.getElementById('banner-screen'),
     gameScreen: document.getElementById('game-screen'),
     
-    // Setup
-    imageInput: document.getElementById('image-input'),
-    imagePreview: document.getElementById('image-preview'),
-    previewTimeInput: document.getElementById('preview-time'),
-    gameTimeInput: document.getElementById('game-time'),
-    startBtn: document.getElementById('start-btn'),
+    // Intro
+    introStartBtn: document.getElementById('intro-start-btn'),
+    bannerImg: document.getElementById('banner-img'),
     
     // Game
+    gameStartBtn: document.getElementById('game-start-btn'),
     gameState: document.getElementById('game-state'),
     timer: document.getElementById('timer'),
     targetRow: document.getElementById('target-row'),
@@ -48,7 +60,11 @@ const elements = {
     resultTitle: document.getElementById('result-title'),
     resultScore: document.getElementById('result-score'),
     restartBtn: document.getElementById('restart-btn'),
-    newGameBtn: document.getElementById('new-game-btn')
+    
+    // Audio
+    audioIntro: document.getElementById('audio-intro'),
+    audioPreview: document.getElementById('audio-preview'),
+    audioGame: document.getElementById('audio-game')
 };
 
 // ===== INITIALIZATION =====
@@ -57,65 +73,60 @@ function init() {
 }
 
 function setupEventListeners() {
-    elements.imageInput.addEventListener('change', handleImageUpload);
-    elements.startBtn.addEventListener('click', startGame);
+    elements.introStartBtn.addEventListener('click', startIntroSequence);
+    elements.gameStartBtn.addEventListener('click', startGameRound);
     elements.revealBtn.addEventListener('click', revealAndFinish);
     elements.restartBtn.addEventListener('click', restartGame);
-    elements.newGameBtn.addEventListener('click', newGame);
 }
 
-// ===== IMAGE HANDLING =====
-function handleImageUpload(e) {
-    const files = Array.from(e.target.files);
+// ===== INTRO SEQUENCE =====
+function startIntroSequence() {
+    game.state = GameState.BANNER;
     
-    if (files.length !== 6) {
-        alert('Por favor, selecciona exactamente 6 imágenes');
-        return;
-    }
+    // Hide intro, show banner
+    elements.introScreen.classList.remove('active');
+    elements.bannerScreen.classList.add('active');
     
-    game.images = [];
-    elements.imagePreview.innerHTML = '';
+    // Start audio
+    elements.audioIntro.play();
     
-    files.forEach((file, index) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            game.images[index] = event.target.result;
-            
-            // Create preview
-            const previewItem = document.createElement('div');
-            previewItem.className = 'preview-item';
-            previewItem.innerHTML = `
-                <img src="${event.target.result}" alt="Imagen ${index + 1}">
-                <span class="preview-number">${index + 1}</span>
-            `;
-            elements.imagePreview.appendChild(previewItem);
-            
-            // Enable start button when all images are loaded
-            if (game.images.filter(img => img).length === 6) {
-                elements.startBtn.disabled = false;
-            }
-        };
-        reader.readAsDataURL(file);
-    });
+    // Start banner animation
+    elements.bannerImg.classList.add('animating');
+    
+    // When audio ends, go to game
+    elements.audioIntro.addEventListener('ended', goToGame, { once: true });
+}
+
+function goToGame() {
+    game.state = GameState.WAITING;
+    
+    // Hide banner, show game
+    elements.bannerScreen.classList.remove('active');
+    elements.gameScreen.classList.add('active');
+    
+    // Reset game state
+    elements.gameState.textContent = 'ESPERANDO...';
+    elements.timer.textContent = '00:00';
+    elements.gameControls.classList.add('hidden');
+    elements.resultSection.classList.add('hidden');
+    elements.gameStartBtn.classList.remove('hidden');
+    
+    // Clear rows
+    elements.targetRow.innerHTML = '';
+    elements.playerRow.innerHTML = '';
+    elements.targetRow.classList.add('hidden-images');
 }
 
 // ===== GAME FLOW =====
-function startGame() {
-    // Get configuration
-    game.previewTime = parseInt(elements.previewTimeInput.value) || 4;
-    game.gameTime = parseInt(elements.gameTimeInput.value) || 20;
+function startGameRound() {
+    // Hide start button
+    elements.gameStartBtn.classList.add('hidden');
     
-    // Set up orders
-    game.targetOrder = [...Array(6).keys()]; // [0, 1, 2, 3, 4, 5]
-    game.playerOrder = shuffleArray([...game.targetOrder]);
+    // Generate random target order
+    game.targetOrder = shuffleArray([0, 1, 2, 3, 4, 5]);
     
-    // Switch to game screen
-    elements.setupScreen.classList.remove('active');
-    elements.gameScreen.classList.add('active');
-    
-    // Render images
+    // Render target row (will be visible during preview)
     renderTargetRow();
-    renderPlayerRow();
     
     // Start preview phase
     startPreview();
@@ -125,14 +136,14 @@ function startPreview() {
     game.state = GameState.PREVIEW;
     elements.gameState.textContent = '👁️ MEMORIZA';
     elements.targetRow.classList.remove('hidden-images');
-    elements.resultSection.classList.add('hidden');
     elements.gameControls.classList.add('hidden');
     
-    // Reset selection
-    game.selectedCardIndex = null;
+    // Play preview audio
+    elements.audioPreview.currentTime = 0;
+    elements.audioPreview.play();
     
     // Start countdown
-    game.timeRemaining = game.previewTime;
+    game.timeRemaining = CONFIG.previewTime;
     updateTimerDisplay();
     
     game.timer = setInterval(() => {
@@ -141,6 +152,7 @@ function startPreview() {
         
         if (game.timeRemaining <= 0) {
             clearInterval(game.timer);
+            elements.audioPreview.pause();
             startPlaying();
         }
     }, 1000);
@@ -152,12 +164,26 @@ function startPlaying() {
     elements.targetRow.classList.add('hidden-images');
     elements.gameControls.classList.remove('hidden');
     
+    // Generate shuffled player order (different from target)
+    game.playerOrder = shuffleArray([...game.targetOrder]);
+    
+    // Make sure it's actually different
+    while (arraysEqual(game.playerOrder, game.targetOrder)) {
+        game.playerOrder = shuffleArray([...game.targetOrder]);
+    }
+    
+    // Render player row
+    renderPlayerRow();
+    
     // Reset selection
     game.selectedCardIndex = null;
-    clearCardSelections();
+    
+    // Play game audio
+    elements.audioGame.currentTime = 0;
+    elements.audioGame.play();
     
     // Start countdown
-    game.timeRemaining = game.gameTime;
+    game.timeRemaining = CONFIG.gameTime;
     updateTimerDisplay();
     
     game.timer = setInterval(() => {
@@ -171,14 +197,16 @@ function startPlaying() {
         
         if (game.timeRemaining <= 0) {
             clearInterval(game.timer);
+            elements.audioGame.pause();
             revealAndFinish();
         }
     }, 1000);
 }
 
 function revealAndFinish() {
-    // Stop timer
+    // Stop timer and audio
     clearInterval(game.timer);
+    elements.audioGame.pause();
     
     game.state = GameState.REVEALING;
     elements.gameState.textContent = '🔍 REVELANDO...';
@@ -258,35 +286,11 @@ function showFinalResult(correct) {
 }
 
 function restartGame() {
-    // Reset player order
-    game.playerOrder = shuffleArray([...game.targetOrder]);
+    // Hide result
+    elements.resultSection.classList.add('hidden');
     
-    // Clear result classes and selections
-    game.selectedCardIndex = null;
-    
-    // Re-render both rows (to clear correct/incorrect classes on target too)
-    renderTargetRow();
-    renderPlayerRow();
-    
-    // Start preview again
-    startPreview();
-}
-
-function newGame() {
-    // Reset everything
-    clearInterval(game.timer);
-    game.images = [];
-    game.targetOrder = [];
-    game.playerOrder = [];
-    game.selectedCardIndex = null;
-    elements.imagePreview.innerHTML = '';
-    elements.startBtn.disabled = true;
-    elements.imageInput.value = '';
-    elements.timer.classList.remove('urgent');
-    
-    // Switch to setup screen
-    elements.gameScreen.classList.remove('active');
-    elements.setupScreen.classList.add('active');
+    // Go back to waiting state
+    goToGame();
 }
 
 // ===== CLICK-TO-SWAP LOGIC =====
@@ -356,7 +360,7 @@ function createImageCard(imgIndex, displayNumber, isClickable) {
     const card = document.createElement('div');
     card.className = 'image-card' + (isClickable ? ' clickable' : '');
     card.innerHTML = `
-        <img src="${game.images[imgIndex]}" alt="Imagen ${imgIndex + 1}">
+        <img src="${CONFIG.images[imgIndex]}" alt="Imagen ${imgIndex + 1}">
         <span class="card-number">${displayNumber}</span>
     `;
     return card;
@@ -369,12 +373,6 @@ function shuffleArray(array) {
         const j = Math.floor(Math.random() * (i + 1));
         [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
     }
-    
-    // Make sure it's actually shuffled (not same as original)
-    if (arraysEqual(newArray, array)) {
-        return shuffleArray(array);
-    }
-    
     return newArray;
 }
 
