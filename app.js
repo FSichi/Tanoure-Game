@@ -48,8 +48,7 @@ const elements = {
     gameStartBtn: document.getElementById('game-start-btn'),
     gameState: document.getElementById('game-state'),
     timer: document.getElementById('timer'),
-    targetRow: document.getElementById('target-row'),
-    playerRow: document.getElementById('player-row'),
+    gameBoard: document.getElementById('game-board'),
     
     // Game Controls
     gameControls: document.getElementById('game-controls'),
@@ -108,14 +107,82 @@ function goToGame() {
     elements.gameState.textContent = 'ESPERANDO...';
     elements.timer.textContent = '00:00';
     elements.gameControls.classList.add('hidden');
+    elements.revealBtn.classList.add('hidden'); // Explicitly hide button
     elements.resultSection.classList.add('hidden');
     elements.gameStartBtn.classList.remove('hidden');
     
-    // Clear rows
-    elements.targetRow.innerHTML = '';
-    elements.playerRow.innerHTML = '';
-    elements.targetRow.classList.add('hidden-images');
+    // Initial empty board setup
+    renderEmptyBoard();
 }
+
+// ===== RENDER LOGIC =====
+
+// ===== RENDER LOGIC =====
+
+function renderEmptyBoard() {
+    elements.gameBoard.innerHTML = '';
+    
+    for (let i = 0; i < 6; i++) {
+        const column = document.createElement('div');
+        column.className = 'game-column';
+        column.innerHTML = `
+            <div class="target-slot" id="target-slot-${i}"></div>
+            <img class="panel-slice" src="img/panel/${i + 1}.png" alt="Panel ${i+1}">
+            <div class="player-slot-container">
+                <div class="player-slot" id="player-slot-${i}"></div>
+                <span class="slot-number">${i + 1}</span>
+            </div>
+        `;
+        elements.gameBoard.appendChild(column);
+    }
+}
+
+/**
+ * Updates the board based on current game state
+ * @param {boolean|null} showTargetImages - If true, show targets. If false, hide them.
+ * @param {boolean} showPlayerImages - If true, render player images. If false, clear them.
+ */
+function updateBoard(showTargetImages, showPlayerImages = true) {
+    for (let i = 0; i < 6; i++) {
+        // Update Target Slot
+        const targetSlot = document.getElementById(`target-slot-${i}`);
+        targetSlot.innerHTML = '';
+        if (game.targetOrder[i] !== undefined) {
+            const img = document.createElement('img');
+            img.src = CONFIG.images[game.targetOrder[i]];
+            img.className = 'game-image';
+            targetSlot.appendChild(img);
+            
+            // Toggle visibility class based on state
+            if (showTargetImages) {
+                targetSlot.classList.remove('hidden-image');
+            } else {
+                targetSlot.classList.add('hidden-image');
+            }
+        }
+        
+        // Update Player Slot
+        const playerSlot = document.getElementById(`player-slot-${i}`);
+        playerSlot.innerHTML = '';
+        
+        if (showPlayerImages && game.playerOrder[i] !== undefined) {
+             const img = document.createElement('img');
+            img.src = CONFIG.images[game.playerOrder[i]];
+            img.className = 'game-image';
+            playerSlot.appendChild(img);
+            
+            // Add click listener
+            playerSlot.onclick = () => handleSlotClick(i);
+            
+            // Re-apply classes
+            playerSlot.className = 'player-slot'; // reset base class
+            if (game.selectedCardIndex === i) {
+                playerSlot.classList.add('selected');
+            }
+        }
+    }
+}
+
 
 // ===== GAME FLOW =====
 function startGameRound() {
@@ -125,8 +192,11 @@ function startGameRound() {
     // Generate random target order
     game.targetOrder = shuffleArray([0, 1, 2, 3, 4, 5]);
     
-    // Render target row (will be visible during preview)
-    renderTargetRow();
+    // Reset player order to empty or undefined for now
+    game.playerOrder = [];
+
+    // Initial render: Show Targets, HIDE Player images (preview phase)
+    updateBoard(true, false);
     
     // Start preview phase
     startPreview();
@@ -135,8 +205,11 @@ function startGameRound() {
 function startPreview() {
     game.state = GameState.PREVIEW;
     elements.gameState.textContent = '👁️ MEMORIZA';
-    elements.targetRow.classList.remove('hidden-images');
     elements.gameControls.classList.add('hidden');
+    elements.revealBtn.classList.add('hidden');
+    
+    // Ensure board state is correct for preview (Targets Visible, Player Hidden)
+    updateBoard(true, false);
     
     // Play preview audio
     elements.audioPreview.currentTime = 0;
@@ -161,8 +234,11 @@ function startPreview() {
 function startPlaying() {
     game.state = GameState.PLAYING;
     elements.gameState.textContent = '🎮 ¡ORDENA!';
-    elements.targetRow.classList.add('hidden-images');
-    elements.gameControls.classList.remove('hidden');
+    elements.gameControls.classList.remove('hidden'); // Show hint
+    elements.revealBtn.classList.remove('hidden'); // Show finish button
+    
+    // **KEY CHANGE**: Hide target images
+    updateBoard(false);
     
     // Generate shuffled player order (different from target)
     game.playerOrder = shuffleArray([...game.targetOrder]);
@@ -172,8 +248,8 @@ function startPlaying() {
         game.playerOrder = shuffleArray([...game.targetOrder]);
     }
     
-    // Render player row
-    renderPlayerRow();
+    // Render player images (and keep target hidden)
+    updateBoard(false);
     
     // Reset selection
     game.selectedCardIndex = null;
@@ -210,9 +286,12 @@ function revealAndFinish() {
     
     game.state = GameState.REVEALING;
     elements.gameState.textContent = '🔍 REVELANDO...';
-    elements.targetRow.classList.remove('hidden-images');
     elements.gameControls.classList.add('hidden');
+    elements.revealBtn.classList.add('hidden'); // Hide button
     elements.timer.classList.remove('urgent');
+    
+    // Show target images again for comparison!
+    updateBoard(true);
     
     // Clear any selection
     game.selectedCardIndex = null;
@@ -223,8 +302,6 @@ function revealAndFinish() {
 }
 
 function revealSequentially() {
-    const playerCards = elements.playerRow.querySelectorAll('.image-card');
-    const targetCards = elements.targetRow.querySelectorAll('.image-card');
     let currentIndex = 0;
     let correct = 0;
     
@@ -235,25 +312,21 @@ function revealSequentially() {
             return;
         }
         
-        const playerCard = playerCards[currentIndex];
-        const targetCard = targetCards[currentIndex];
+        const playerSlot = document.getElementById(`player-slot-${currentIndex}`);
+        // Visual comparison is easier if we also highlight target, but let's stick to player slot feedback
         const isCorrect = game.playerOrder[currentIndex] === game.targetOrder[currentIndex];
         
         // Add checking animation
-        playerCard.classList.add('checking');
-        targetCard.classList.add('checking');
+        playerSlot.classList.add('checking');
         
         setTimeout(() => {
-            playerCard.classList.remove('checking');
-            targetCard.classList.remove('checking');
+            playerSlot.classList.remove('checking');
             
             if (isCorrect) {
                 correct++;
-                playerCard.classList.add('correct');
-                targetCard.classList.add('correct');
+                playerSlot.classList.add('correct');
             } else {
-                playerCard.classList.add('incorrect');
-                targetCard.classList.add('incorrect');
+                playerSlot.classList.add('incorrect');
             }
             
             currentIndex++;
@@ -294,29 +367,32 @@ function restartGame() {
 }
 
 // ===== CLICK-TO-SWAP LOGIC =====
-function handleCardClick(cardIndex) {
+function handleSlotClick(slotIndex) {
     // Only allow interaction during PLAYING state
     if (game.state !== GameState.PLAYING) return;
     
-    const cards = elements.playerRow.querySelectorAll('.image-card');
+    const playerSlot = document.getElementById(`player-slot-${slotIndex}`);
     
     if (game.selectedCardIndex === null) {
         // First card selected
-        game.selectedCardIndex = cardIndex;
-        cards[cardIndex].classList.add('selected');
-    } else if (game.selectedCardIndex === cardIndex) {
+        game.selectedCardIndex = slotIndex;
+        playerSlot.classList.add('selected');
+    } else if (game.selectedCardIndex === slotIndex) {
         // Same card clicked - deselect
         game.selectedCardIndex = null;
-        cards[cardIndex].classList.remove('selected');
+        playerSlot.classList.remove('selected');
     } else {
         // Second card selected - perform swap!
         const idx1 = game.selectedCardIndex;
-        const idx2 = cardIndex;
+        const idx2 = slotIndex;
+        
+        const slot1 = document.getElementById(`player-slot-${idx1}`);
+        const slot2 = document.getElementById(`player-slot-${idx2}`);
         
         // Add swap animation to both cards
-        cards[idx1].classList.add('swapping');
-        cards[idx2].classList.add('swapping');
-        cards[idx1].classList.remove('selected');
+        slot1.classList.add('swapping');
+        slot2.classList.add('swapping');
+        slot1.classList.remove('selected'); // remove check from first
         
         // Swap in array
         [game.playerOrder[idx1], game.playerOrder[idx2]] = [game.playerOrder[idx2], game.playerOrder[idx1]];
@@ -324,46 +400,17 @@ function handleCardClick(cardIndex) {
         // Re-render after animation
         setTimeout(() => {
             game.selectedCardIndex = null;
-            renderPlayerRow();
+            // Re-render only player slots ideally, but full board update is fast enough
+            updateBoard(false); // keep target hidden
         }, 300);
     }
 }
 
 function clearCardSelections() {
-    const cards = elements.playerRow.querySelectorAll('.image-card');
-    cards.forEach(card => {
-        card.classList.remove('selected', 'swapping', 'correct', 'incorrect', 'checking');
-    });
-}
-
-// ===== RENDERING =====
-function renderTargetRow() {
-    elements.targetRow.innerHTML = '';
-    
-    game.targetOrder.forEach((imgIndex, position) => {
-        const card = createImageCard(imgIndex, position + 1, false);
-        elements.targetRow.appendChild(card);
-    });
-}
-
-function renderPlayerRow() {
-    elements.playerRow.innerHTML = '';
-    
-    game.playerOrder.forEach((imgIndex, position) => {
-        const card = createImageCard(imgIndex, position + 1, true);
-        card.addEventListener('click', () => handleCardClick(position));
-        elements.playerRow.appendChild(card);
-    });
-}
-
-function createImageCard(imgIndex, displayNumber, isClickable) {
-    const card = document.createElement('div');
-    card.className = 'image-card' + (isClickable ? ' clickable' : '');
-    card.innerHTML = `
-        <img src="${CONFIG.images[imgIndex]}" alt="Imagen ${imgIndex + 1}">
-        <span class="card-number">${displayNumber}</span>
-    `;
-    return card;
+     for (let i = 0; i < 6; i++) {
+        const slot = document.getElementById(`player-slot-${i}`);
+        if(slot) slot.classList.remove('selected', 'swapping', 'correct', 'incorrect', 'checking');
+    }
 }
 
 // ===== UTILITIES =====

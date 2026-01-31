@@ -22,32 +22,27 @@
 
     <!-- PANTALLA DE JUEGO -->
     <div id="game-screen" class="screen game-screen">
+        <!-- Header -->
         <div class="game-header">
-            <button id="game-start-btn" class="btn-game-start">▶ Iniciar Juego</button>
-            <div class="game-info">
+            <div class="header-left">
+                <button id="game-start-btn" class="btn-game-start">▶ JUGAR</button>
                 <span class="game-state" id="game-state">ESPERANDO...</span>
+            </div>
+
+            <div class="header-right">
+                <button id="reveal-btn" class="btn-reveal hidden">Finalizar</button>
                 <span class="timer" id="timer">00:00</span>
             </div>
         </div>
 
-        <div class="game-area">
-            <!-- Fila Superior (Objetivo) -->
-            <div class="row-container">
-                <h2 class="row-title">🎯 Orden Objetivo</h2>
-                <div id="target-row" class="image-row target-row"></div>
-            </div>
-
-            <!-- Fila Inferior (Jugable) -->
-            <div class="row-container">
-                <h2 class="row-title">🔄 Tu Orden</h2>
-                <div id="player-row" class="image-row player-row"></div>
-            </div>
+        <!-- Tablero de Juego (Columnas) -->
+        <div class="game-board" id="game-board">
+            <!-- Las columnas se generarán dinámicamente con JS -->
         </div>
 
-        <!-- Controles durante el juego -->
+        <!-- Hint Text only -->
         <div id="game-controls" class="game-controls hidden">
-            <p class="swap-hint-text">👆 Haz clic en dos imágenes para intercambiarlas</p>
-            <button id="reveal-btn" class="btn-reveal">✅ Revelar y Terminar</button>
+            <p class="swap-hint-text">👆 Clic para intercambiar</p>
         </div>
 
         <!-- Resultado -->
@@ -63,7 +58,7 @@
     <!-- AUDIOS -->
     <audio id="audio-intro" src="audio/29 - Revelacion - Sueños.wav" preload="auto"></audio>
     <audio id="audio-preview" src="audio/4secs.mp3" preload="auto"></audio>
-    <audio id="audio-game" src="audio/30sec.mp3" preload="auto"></audio>
+    <audio id="audio-game" src="audio/30sec.mp3" preload="auto" loop></audio>
 
     <script src="app.js"></script>
 </body>
