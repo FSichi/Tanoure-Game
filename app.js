@@ -3,6 +3,7 @@ const GameState = {
     SETUP: 'SETUP',
     PREVIEW: 'PREVIEW',
     PLAYING: 'PLAYING',
+    REVEALING: 'REVEALING',
     RESULT: 'RESULT'
 };
 
@@ -38,6 +39,10 @@ const elements = {
     targetRow: document.getElementById('target-row'),
     playerRow: document.getElementById('player-row'),
     
+    // Game Controls
+    gameControls: document.getElementById('game-controls'),
+    revealBtn: document.getElementById('reveal-btn'),
+    
     // Result
     resultSection: document.getElementById('result-section'),
     resultTitle: document.getElementById('result-title'),
@@ -54,6 +59,7 @@ function init() {
 function setupEventListeners() {
     elements.imageInput.addEventListener('change', handleImageUpload);
     elements.startBtn.addEventListener('click', startGame);
+    elements.revealBtn.addEventListener('click', revealAndFinish);
     elements.restartBtn.addEventListener('click', restartGame);
     elements.newGameBtn.addEventListener('click', newGame);
 }
@@ -120,6 +126,7 @@ function startPreview() {
     elements.gameState.textContent = '👁️ MEMORIZA';
     elements.targetRow.classList.remove('hidden-images');
     elements.resultSection.classList.add('hidden');
+    elements.gameControls.classList.add('hidden');
     
     // Reset selection
     game.selectedCardIndex = null;
@@ -141,8 +148,9 @@ function startPreview() {
 
 function startPlaying() {
     game.state = GameState.PLAYING;
-    elements.gameState.textContent = '🎮 ¡ORDENA! - Haz clic en dos imágenes para intercambiar';
+    elements.gameState.textContent = '🎮 ¡ORDENA!';
     elements.targetRow.classList.add('hidden-images');
+    elements.gameControls.classList.remove('hidden');
     
     // Reset selection
     game.selectedCardIndex = null;
@@ -163,34 +171,75 @@ function startPlaying() {
         
         if (game.timeRemaining <= 0) {
             clearInterval(game.timer);
-            showResult();
+            revealAndFinish();
         }
     }, 1000);
 }
 
-function showResult() {
-    game.state = GameState.RESULT;
-    elements.gameState.textContent = '🏁 RESULTADO';
+function revealAndFinish() {
+    // Stop timer
+    clearInterval(game.timer);
+    
+    game.state = GameState.REVEALING;
+    elements.gameState.textContent = '🔍 REVELANDO...';
     elements.targetRow.classList.remove('hidden-images');
+    elements.gameControls.classList.add('hidden');
     elements.timer.classList.remove('urgent');
     
     // Clear any selection
     game.selectedCardIndex = null;
     clearCardSelections();
     
-    // Calculate score and mark correct/incorrect
-    let correct = 0;
+    // Start sequential reveal animation
+    revealSequentially();
+}
+
+function revealSequentially() {
     const playerCards = elements.playerRow.querySelectorAll('.image-card');
+    const targetCards = elements.targetRow.querySelectorAll('.image-card');
+    let currentIndex = 0;
+    let correct = 0;
     
-    game.playerOrder.forEach((imgIndex, position) => {
-        const card = playerCards[position];
-        if (imgIndex === game.targetOrder[position]) {
-            correct++;
-            card.classList.add('correct');
-        } else {
-            card.classList.add('incorrect');
+    function revealNext() {
+        if (currentIndex >= 6) {
+            // All done, show result after a short delay
+            setTimeout(() => showFinalResult(correct), 500);
+            return;
         }
-    });
+        
+        const playerCard = playerCards[currentIndex];
+        const targetCard = targetCards[currentIndex];
+        const isCorrect = game.playerOrder[currentIndex] === game.targetOrder[currentIndex];
+        
+        // Add checking animation
+        playerCard.classList.add('checking');
+        targetCard.classList.add('checking');
+        
+        setTimeout(() => {
+            playerCard.classList.remove('checking');
+            targetCard.classList.remove('checking');
+            
+            if (isCorrect) {
+                correct++;
+                playerCard.classList.add('correct');
+                targetCard.classList.add('correct');
+            } else {
+                playerCard.classList.add('incorrect');
+                targetCard.classList.add('incorrect');
+            }
+            
+            currentIndex++;
+            setTimeout(revealNext, 400);
+        }, 400);
+    }
+    
+    // Start reveal sequence
+    setTimeout(revealNext, 500);
+}
+
+function showFinalResult(correct) {
+    game.state = GameState.RESULT;
+    elements.gameState.textContent = '🏁 RESULTADO';
     
     // Show result modal
     elements.resultSection.classList.remove('hidden');
@@ -215,7 +264,8 @@ function restartGame() {
     // Clear result classes and selections
     game.selectedCardIndex = null;
     
-    // Re-render player row
+    // Re-render both rows (to clear correct/incorrect classes on target too)
+    renderTargetRow();
     renderPlayerRow();
     
     // Start preview again
@@ -278,7 +328,7 @@ function handleCardClick(cardIndex) {
 function clearCardSelections() {
     const cards = elements.playerRow.querySelectorAll('.image-card');
     cards.forEach(card => {
-        card.classList.remove('selected', 'swapping', 'correct', 'incorrect');
+        card.classList.remove('selected', 'swapping', 'correct', 'incorrect', 'checking');
     });
 }
 
