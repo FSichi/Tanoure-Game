@@ -5,14 +5,13 @@ const GameState = {
     WAITING: 'WAITING',
     PREVIEW: 'PREVIEW',
     PLAYING: 'PLAYING',
-    REVEALING: 'REVEALING',
     RESULT: 'RESULT'
 };
 
 // ===== CONFIGURATION =====
 const CONFIG = {
-    previewTime: 4,    // Segundos para memorizar
-    gameTime: 30,      // Segundos para jugar
+    previewTime: 4,
+    gameTime: 30,
     images: [
         'img/game/1.jpeg',
         'img/game/2.jpeg',
@@ -26,8 +25,8 @@ const CONFIG = {
 // ===== GAME DATA =====
 let game = {
     state: GameState.INTRO,
-    targetOrder: [],     // Orden objetivo (aleatorio cada vez)
-    playerOrder: [],     // Orden del jugador (desordenado)
+    targetOrder: [],
+    playerOrder: [],
     timer: null,
     timeRemaining: 0,
     selectedCardIndex: null
@@ -40,30 +39,24 @@ const elements = {
     bannerScreen: document.getElementById('banner-screen'),
     gameScreen: document.getElementById('game-screen'),
     
-    // Intro
+    // Intro & Banner
     introStartBtn: document.getElementById('intro-start-btn'),
     bannerImg: document.getElementById('banner-img'),
     
-    // Game
-    gameStartBtn: document.getElementById('game-start-btn'),
+    // Header Controls
+    gameStartBtn: document.getElementById('game-start-btn'), // "JUGAR"
+    revealBtn: document.getElementById('reveal-btn'),       // "FINALIZAR"
     gameState: document.getElementById('game-state'),
     timer: document.getElementById('timer'),
+    
+    // Board
     gameBoard: document.getElementById('game-board'),
-    
-    // Game Controls
-    gameControls: document.getElementById('game-controls'),
-    revealBtn: document.getElementById('reveal-btn'),
-    
-    // Result
-    resultSection: document.getElementById('result-section'),
-    resultTitle: document.getElementById('result-title'),
-    resultScore: document.getElementById('result-score'),
-    restartBtn: document.getElementById('restart-btn'),
+    gameControls: document.getElementById('game-controls'), // Hint text (mostly hidden)
     
     // Audio
     audioIntro: document.getElementById('audio-intro'),
-    audioPreview: document.getElementById('audio-preview'),
-    audioGame: document.getElementById('audio-game')
+    audioPreview: document.getElementById('audio-preview'), // 4secs
+    audioGame: document.getElementById('audio-game')        // 30secs loop
 };
 
 // ===== INITIALIZATION =====
@@ -73,53 +66,186 @@ function init() {
 
 function setupEventListeners() {
     elements.introStartBtn.addEventListener('click', startIntroSequence);
-    elements.gameStartBtn.addEventListener('click', startGameRound);
-    elements.revealBtn.addEventListener('click', revealAndFinish);
-    elements.restartBtn.addEventListener('click', restartGame);
+    
+    // Boton JUGAR / REINICIAR (Mismo botón, reciclamos lógica o usamos visibilidad)
+    elements.gameStartBtn.addEventListener('click', handleStartButton);
+    
+    // Boton FINALIZAR
+    elements.revealBtn.addEventListener('click', forceFinishGame);
 }
 
 // ===== INTRO SEQUENCE =====
 function startIntroSequence() {
     game.state = GameState.BANNER;
-    
-    // Hide intro, show banner
     elements.introScreen.classList.remove('active');
     elements.bannerScreen.classList.add('active');
     
-    // Start audio
     elements.audioIntro.play();
-    
-    // Start banner animation
     elements.bannerImg.classList.add('animating');
     
-    // When audio ends, go to game
     elements.audioIntro.addEventListener('ended', goToGame, { once: true });
 }
 
 function goToGame() {
-    game.state = GameState.WAITING;
-    
-    // Hide banner, show game
+    // Transición a pantalla de juego
     elements.bannerScreen.classList.remove('active');
     elements.gameScreen.classList.add('active');
     
-    // Reset game state
-    elements.gameState.textContent = 'ESPERANDO...';
-    elements.timer.textContent = '00:00';
-    elements.gameControls.classList.add('hidden');
-    elements.revealBtn.classList.add('hidden'); // Explicitly hide button
-    elements.resultSection.classList.add('hidden');
-    elements.gameStartBtn.classList.remove('hidden');
-    
-    // Initial empty board setup
-    renderEmptyBoard();
+    resetToWaitingState();
 }
 
-// ===== RENDER LOGIC =====
+// ===== GAME LOGIC & STATES =====
 
-// ===== RENDER LOGIC =====
+function resetToWaitingState() {
+    game.state = GameState.WAITING;
+    clearInterval(game.timer);
+    stopAllAudio();
+    
+    // UI Reset
+    elements.gameState.textContent = 'ESPERANDO...';
+    elements.timer.textContent = '00:00';
+    elements.timer.classList.remove('urgent');
+    
+    // Botones Header
+    elements.gameStartBtn.textContent = '▶ JUGAR'; // Reset text
+    showStartButton(true);   // Mostrar JUGAR
+    showFinishButton(false); // Ocultar FINALIZAR
+    
+    // Generar Orden Objetivo Nuevo
+    game.targetOrder = shuffleArray([0, 1, 2, 3, 4, 5]);
+    game.playerOrder = []; // Vacío inicialmente
+    game.selectedCardIndex = null;
+    
+    // Render: 
+    // Target: VISIBLE
+    // Player: OCULTO/NO RENDERIZADO
+    renderBoard(); 
+    updateBoardVisibility(true, false);
+}
 
-function renderEmptyBoard() {
+function handleStartButton() {
+    if (game.state === GameState.RESULT) {
+        // Si estamos en Resultado, el botón dice "Reiniciar"
+        // Acción: Limpiar y volver a esperar
+        resetToWaitingState();
+    } else if (game.state === GameState.WAITING) {
+        // Si estamos esperando, el botón dice "Jugar"
+        // Acción: Iniciar juego
+        startGameSequence();
+    } else {
+        // Fallback safety
+        resetToWaitingState();
+    }
+}
+
+function startGameSequence() {
+    // 1. Fase PREVIEW (4s)
+    game.state = GameState.PREVIEW;
+    elements.gameState.textContent = '👁️ MEMORIZA';
+    
+    // Botones
+    showStartButton(false);  // Ocultar JUGAR
+    showFinishButton(false); // Aun no se puede finalizar en preview
+    
+    // Generar Orden Jugador (Diferente al target)
+    game.playerOrder = shuffleArray([...game.targetOrder]);
+    while (arraysEqual(game.playerOrder, game.targetOrder)) {
+        game.playerOrder = shuffleArray([...game.targetOrder]);
+    }
+    
+    // Render:
+    // Target: VISIBLE
+    // Player: VISIBLE (Convivencia)
+    updateBoardVisibility(true, true);
+    
+    // Audio Preview
+    elements.audioPreview.currentTime = 0;
+    elements.audioPreview.play();
+    
+    // Timer 4s
+    game.timeRemaining = CONFIG.previewTime;
+    updateTimerDisplay();
+    
+    game.timer = setInterval(() => {
+        game.timeRemaining--;
+        updateTimerDisplay();
+        
+        if (game.timeRemaining <= 0) {
+            clearInterval(game.timer);
+            elements.audioPreview.pause();
+            startPlayingPhase();
+        }
+    }, 1000);
+}
+
+function startPlayingPhase() {
+    // 2. Fase PLAYING (30s)
+    game.state = GameState.PLAYING;
+    elements.gameState.textContent = '🎮 ¡ORDENA!';
+    
+    // Botones
+    showStartButton(false);
+    showFinishButton(true); // Aparece FINALIZAR
+    
+    // Render:
+    // Target: OCULTO (Espacio reservado)
+    // Player: VISIBLE
+    updateBoardVisibility(false, true);
+    
+    // Audio Game
+    elements.audioGame.currentTime = 0;
+    elements.audioGame.play();
+    
+    // Timer 30s
+    game.timeRemaining = CONFIG.gameTime;
+    updateTimerDisplay();
+    
+    game.timer = setInterval(() => {
+        game.timeRemaining--;
+        updateTimerDisplay();
+        
+        if (game.timeRemaining <= 5) {
+            elements.timer.classList.add('urgent');
+        }
+        
+        if (game.timeRemaining <= 0) {
+            forceFinishGame();
+        }
+    }, 1000);
+}
+
+function forceFinishGame() {
+    // 3. Fase RESULTADO
+    clearInterval(game.timer);
+    stopAllAudio();
+    
+    game.state = GameState.RESULT;
+    elements.gameState.textContent = '🏁 FINALIZADO';
+    elements.timer.classList.remove('urgent');
+    
+    // Botones
+    showFinishButton(false);
+    
+    // Convertir botón JUGAR en botón REINICIAR (Visualmente es el mismo btn-game-start)
+    const btn = elements.gameStartBtn;
+    btn.textContent = '🔄 REINICIAR';
+    showStartButton(true);
+    
+    // Render:
+    // Target: VISIBLE (Para comparar)
+    // Player: VISIBLE (Como quedó)
+    updateBoardVisibility(true, true);
+    
+    // Deseleccionar cualquier carta activa
+    game.selectedCardIndex = null;
+    clearCardSelections();
+}
+
+// ===== RENDER & DOM HELPER =====
+
+function renderBoard() {
+    // Renderiza la estructura base del tablero.
+    // Se llama en resetToWaitingState.
     elements.gameBoard.innerHTML = '';
     
     for (let i = 0; i < 6; i++) {
@@ -137,283 +263,118 @@ function renderEmptyBoard() {
     }
 }
 
-/**
- * Updates the board based on current game state
- * @param {boolean|null} showTargetImages - If true, show targets. If false, hide them.
- * @param {boolean} showPlayerImages - If true, render player images. If false, clear them.
- */
-function updateBoard(showTargetImages, showPlayerImages = true) {
+function updateBoardVisibility(showTarget, showPlayer) {
     for (let i = 0; i < 6; i++) {
-        // Update Target Slot
         const targetSlot = document.getElementById(`target-slot-${i}`);
+        const playerSlot = document.getElementById(`player-slot-${i}`);
+        
+        // --- TARGET ROW ---
+        /* Limpiamos y re-llenamos siempre para asegurar estado fresco, 
+           aunque no es lo mas optimo en performance, es seguro para logica simple */
         targetSlot.innerHTML = '';
         if (game.targetOrder[i] !== undefined) {
-            const img = document.createElement('img');
-            img.src = CONFIG.images[game.targetOrder[i]];
-            img.className = 'game-image';
-            targetSlot.appendChild(img);
-            
-            // Toggle visibility class based on state
-            if (showTargetImages) {
-                targetSlot.classList.remove('hidden-image');
-            } else {
-                targetSlot.classList.add('hidden-image');
-            }
+             const img = document.createElement('img');
+             img.src = CONFIG.images[game.targetOrder[i]];
+             img.className = 'game-image';
+             targetSlot.appendChild(img);
         }
         
-        // Update Player Slot
-        const playerSlot = document.getElementById(`player-slot-${i}`);
-        playerSlot.innerHTML = '';
+        // Visibilidad CSS
+        if (showTarget) {
+            targetSlot.classList.remove('hidden-image');
+        } else {
+            targetSlot.classList.add('hidden-image');
+        }
         
-        if (showPlayerImages && game.playerOrder[i] !== undefined) {
-             const img = document.createElement('img');
+        // --- PLAYER ROW ---
+        playerSlot.innerHTML = '';
+        // Solo renderizamos contenido si showPlayer es true y existe orden
+        if (showPlayer && game.playerOrder[i] !== undefined) {
+            const img = document.createElement('img');
             img.src = CONFIG.images[game.playerOrder[i]];
             img.className = 'game-image';
             playerSlot.appendChild(img);
             
-            // Add click listener
+            // Interaction
             playerSlot.onclick = () => handleSlotClick(i);
             
-            // Re-apply classes
-            playerSlot.className = 'player-slot'; // reset base class
+            // Classes
+            playerSlot.className = 'player-slot';
             if (game.selectedCardIndex === i) {
                 playerSlot.classList.add('selected');
             }
+        } else {
+            // Si showPlayer es false, el slot queda vacío (fondo gris)
+            playerSlot.className = 'player-slot';
+            playerSlot.onclick = null;
         }
     }
 }
 
+// ===== INTERACTION =====
 
-// ===== GAME FLOW =====
-function startGameRound() {
-    // Hide start button
-    elements.gameStartBtn.classList.add('hidden');
-    
-    // Generate random target order
-    game.targetOrder = shuffleArray([0, 1, 2, 3, 4, 5]);
-    
-    // Reset player order to empty or undefined for now
-    game.playerOrder = [];
-
-    // Initial render: Show Targets, HIDE Player images (preview phase)
-    updateBoard(true, false);
-    
-    // Start preview phase
-    startPreview();
-}
-
-function startPreview() {
-    game.state = GameState.PREVIEW;
-    elements.gameState.textContent = '👁️ MEMORIZA';
-    elements.gameControls.classList.add('hidden');
-    elements.revealBtn.classList.add('hidden');
-    
-    // Ensure board state is correct for preview (Targets Visible, Player Hidden)
-    updateBoard(true, false);
-    
-    // Play preview audio
-    elements.audioPreview.currentTime = 0;
-    elements.audioPreview.play();
-    
-    // Start countdown
-    game.timeRemaining = CONFIG.previewTime;
-    updateTimerDisplay();
-    
-    game.timer = setInterval(() => {
-        game.timeRemaining--;
-        updateTimerDisplay();
-        
-        if (game.timeRemaining <= 0) {
-            clearInterval(game.timer);
-            elements.audioPreview.pause();
-            startPlaying();
-        }
-    }, 1000);
-}
-
-function startPlaying() {
-    game.state = GameState.PLAYING;
-    elements.gameState.textContent = '🎮 ¡ORDENA!';
-    elements.gameControls.classList.remove('hidden'); // Show hint
-    elements.revealBtn.classList.remove('hidden'); // Show finish button
-    
-    // **KEY CHANGE**: Hide target images
-    updateBoard(false);
-    
-    // Generate shuffled player order (different from target)
-    game.playerOrder = shuffleArray([...game.targetOrder]);
-    
-    // Make sure it's actually different
-    while (arraysEqual(game.playerOrder, game.targetOrder)) {
-        game.playerOrder = shuffleArray([...game.targetOrder]);
-    }
-    
-    // Render player images (and keep target hidden)
-    updateBoard(false);
-    
-    // Reset selection
-    game.selectedCardIndex = null;
-    
-    // Play game audio
-    elements.audioGame.currentTime = 0;
-    elements.audioGame.play();
-    
-    // Start countdown
-    game.timeRemaining = CONFIG.gameTime;
-    updateTimerDisplay();
-    
-    game.timer = setInterval(() => {
-        game.timeRemaining--;
-        updateTimerDisplay();
-        
-        // Add urgent class when time is running low
-        if (game.timeRemaining <= 5) {
-            elements.timer.classList.add('urgent');
-        }
-        
-        if (game.timeRemaining <= 0) {
-            clearInterval(game.timer);
-            elements.audioGame.pause();
-            revealAndFinish();
-        }
-    }, 1000);
-}
-
-function revealAndFinish() {
-    // Stop timer and audio
-    clearInterval(game.timer);
-    elements.audioGame.pause();
-    
-    game.state = GameState.REVEALING;
-    elements.gameState.textContent = '🔍 REVELANDO...';
-    elements.gameControls.classList.add('hidden');
-    elements.revealBtn.classList.add('hidden'); // Hide button
-    elements.timer.classList.remove('urgent');
-    
-    // Show target images again for comparison!
-    updateBoard(true);
-    
-    // Clear any selection
-    game.selectedCardIndex = null;
-    clearCardSelections();
-    
-    // Start sequential reveal animation
-    revealSequentially();
-}
-
-function revealSequentially() {
-    let currentIndex = 0;
-    let correct = 0;
-    
-    function revealNext() {
-        if (currentIndex >= 6) {
-            // All done, show result after a short delay
-            setTimeout(() => showFinalResult(correct), 500);
-            return;
-        }
-        
-        const playerSlot = document.getElementById(`player-slot-${currentIndex}`);
-        // Visual comparison is easier if we also highlight target, but let's stick to player slot feedback
-        const isCorrect = game.playerOrder[currentIndex] === game.targetOrder[currentIndex];
-        
-        // Add checking animation
-        playerSlot.classList.add('checking');
-        
-        setTimeout(() => {
-            playerSlot.classList.remove('checking');
-            
-            if (isCorrect) {
-                correct++;
-                playerSlot.classList.add('correct');
-            } else {
-                playerSlot.classList.add('incorrect');
-            }
-            
-            currentIndex++;
-            setTimeout(revealNext, 400);
-        }, 400);
-    }
-    
-    // Start reveal sequence
-    setTimeout(revealNext, 500);
-}
-
-function showFinalResult(correct) {
-    game.state = GameState.RESULT;
-    elements.gameState.textContent = '🏁 RESULTADO';
-    
-    // Show result modal
-    elements.resultSection.classList.remove('hidden');
-    
-    if (correct === 6) {
-        elements.resultTitle.textContent = '🎉 ¡PERFECTO!';
-    } else if (correct >= 4) {
-        elements.resultTitle.textContent = '👏 ¡Muy Bien!';
-    } else if (correct >= 2) {
-        elements.resultTitle.textContent = '💪 ¡Casi!';
-    } else {
-        elements.resultTitle.textContent = '😅 ¡Inténtalo de nuevo!';
-    }
-    
-    elements.resultScore.textContent = `${correct}/6`;
-}
-
-function restartGame() {
-    // Hide result
-    elements.resultSection.classList.add('hidden');
-    
-    // Go back to waiting state
-    goToGame();
-}
-
-// ===== CLICK-TO-SWAP LOGIC =====
 function handleSlotClick(slotIndex) {
-    // Only allow interaction during PLAYING state
     if (game.state !== GameState.PLAYING) return;
     
     const playerSlot = document.getElementById(`player-slot-${slotIndex}`);
     
     if (game.selectedCardIndex === null) {
-        // First card selected
         game.selectedCardIndex = slotIndex;
         playerSlot.classList.add('selected');
     } else if (game.selectedCardIndex === slotIndex) {
-        // Same card clicked - deselect
         game.selectedCardIndex = null;
         playerSlot.classList.remove('selected');
     } else {
-        // Second card selected - perform swap!
+        // Swap
         const idx1 = game.selectedCardIndex;
         const idx2 = slotIndex;
         
+        // Animacion swap visual
         const slot1 = document.getElementById(`player-slot-${idx1}`);
         const slot2 = document.getElementById(`player-slot-${idx2}`);
-        
-        // Add swap animation to both cards
         slot1.classList.add('swapping');
         slot2.classList.add('swapping');
-        slot1.classList.remove('selected'); // remove check from first
+        slot1.classList.remove('selected');
         
-        // Swap in array
+        // Data swap
         [game.playerOrder[idx1], game.playerOrder[idx2]] = [game.playerOrder[idx2], game.playerOrder[idx1]];
         
-        // Re-render after animation
         setTimeout(() => {
             game.selectedCardIndex = null;
-            // Re-render only player slots ideally, but full board update is fast enough
-            updateBoard(false); // keep target hidden
+            // Re-render, manteniendo target oculto (false) y player visible (true)
+            updateBoardVisibility(false, true); 
         }, 300);
     }
 }
 
 function clearCardSelections() {
-     for (let i = 0; i < 6; i++) {
-        const slot = document.getElementById(`player-slot-${i}`);
-        if(slot) slot.classList.remove('selected', 'swapping', 'correct', 'incorrect', 'checking');
+    const slots = document.querySelectorAll('.player-slot');
+    slots.forEach(s => s.classList.remove('selected', 'swapping', 'checking', 'correct', 'incorrect'));
+}
+
+// ===== UTILS & HELPERS =====
+
+function showStartButton(show) {
+    if (show) {
+        elements.gameStartBtn.classList.remove('hidden');
+        if (game.state === GameState.WAITING) elements.gameStartBtn.textContent = '▶ JUGAR';
+    } else {
+        elements.gameStartBtn.classList.add('hidden');
     }
 }
 
-// ===== UTILITIES =====
+function showFinishButton(show) {
+    if (show) elements.revealBtn.classList.remove('hidden');
+    else elements.revealBtn.classList.add('hidden');
+}
+
+function stopAllAudio() {
+    elements.audioPreview.pause();
+    elements.audioPreview.currentTime = 0;
+    elements.audioGame.pause();
+    elements.audioGame.currentTime = 0;
+}
+
 function shuffleArray(array) {
     const newArray = [...array];
     for (let i = newArray.length - 1; i > 0; i--) {
@@ -424,6 +385,7 @@ function shuffleArray(array) {
 }
 
 function arraysEqual(a, b) {
+    if (!a || !b) return false;
     return a.length === b.length && a.every((val, i) => val === b[i]);
 }
 
@@ -433,5 +395,5 @@ function updateTimerDisplay() {
     elements.timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-// ===== START =====
+// Start
 init();
